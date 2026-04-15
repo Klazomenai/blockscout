@@ -20,7 +20,8 @@ defmodule BlockScout.Mixfile do
             ethereum_jsonrpc: :permanent,
             explorer: :permanent,
             indexer: :permanent,
-            utils: :permanent
+            utils: :permanent,
+            nft_media_handler: :permanent
           ],
           steps: [:assemble, &copy_prod_runtime_config/1],
           validate_compile_env: false

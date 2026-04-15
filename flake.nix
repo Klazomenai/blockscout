@@ -12,7 +12,11 @@
       nixpkgs,
       flake-utils,
     }:
-    flake-utils.lib.eachDefaultSystem (
+    # Restricted to x86_64-linux: the Rustler precompiled NIF tarballs in
+    # nifTarballs are hardcoded for x86_64-unknown-linux-gnu. Other systems
+    # would need their own per-target NIF cache (or local Rust compilation,
+    # which currently fails because Cargo can't reach crates.io in the sandbox).
+    flake-utils.lib.eachSystem [ "x86_64-linux" ] (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
@@ -61,7 +65,9 @@
             inherit name url hash;
           };
 
-        # Collection of all 7 Rustler precompiled NIF tarballs for x86_64-linux-gnu, NIF 2.16
+        # All 8 Rustler precompiled NIF tarballs for x86_64-unknown-linux-gnu.
+        # Per-package NIF version varies based on each package's nif_versions
+        # list and the runtime's max NIF version (OTP 27 supports up to 2.17).
         nifTarballs = [
           {
             name = "libcafezinho-v0.4.4-nif-2.16-x86_64-unknown-linux-gnu.so.tar.gz";
@@ -118,9 +124,11 @@
         # Blockscout requires Elixir ~> 1.19; the default beam27.elixir is 1.18.
         elixir = beam27.elixir_1_19;
 
+        blockscoutVersion = "11.0.0";
+
         blockscout = beam27.mixRelease {
           pname = "blockscout";
-          version = "11.0.0";
+          version = blockscoutVersion;
           src = ./.;
 
           inherit elixir;
@@ -130,7 +138,7 @@
           mixFodDeps = beam27.fetchMixDeps {
             pname = "mix-deps-blockscout";
             src = ./.;
-            version = "11.0.0";
+            version = blockscoutVersion;
             hash = "sha256-hi8Kq8j91LKQDD8GroLESPnzBfwUeJsszb1lTa0k2iI=";
             inherit elixir;
           };
@@ -163,6 +171,20 @@
             openssl
           ];
 
+          # Patch mix.exs to remove nft_media_handler from the release. This
+          # is done at Nix build time only — the committed mix.exs is left
+          # unchanged so that other build paths (Docker, NFT_MEDIA_HANDLER_IS_WORKER
+          # mode, docker-compose nft_media_handler service) continue to work.
+          # We also remove the umbrella app directory because Mix compiles all
+          # umbrella apps regardless of release config, and nft_media_handler
+          # depends on evision (OpenCV) which is out of MVP scope.
+          postPatch = ''
+            substituteInPlace mix.exs \
+              --replace-fail "            nft_media_handler: :permanent" "" \
+              --replace-fail "            utils: :permanent," "            utils: :permanent"
+            rm -rf apps/nft_media_handler
+          '';
+
           # Fix dependency build scripts BEFORE mix deps.compile runs.
           preConfigure = ''
             # Fix shebangs and permissions in dependency scripts.
@@ -177,11 +199,6 @@
             mkdir -p "$MIX_DEPS_PATH/ezstd/_build/deps/zstd/lib"
             cp ${zstdStatic}/lib/libzstd.a "$MIX_DEPS_PATH/ezstd/_build/deps/zstd/lib/"
             cp ${zstdStatic}/include/*.h "$MIX_DEPS_PATH/ezstd/_build/deps/zstd/lib/"
-
-            # Remove nft_media_handler from umbrella apps. Mix compiles all
-            # umbrella apps regardless of release config, and nft_media_handler
-            # depends on evision (OpenCV) which is heavy and not needed for MVP.
-            rm -rf apps/nft_media_handler
           '';
 
           doCheck = false;
@@ -190,10 +207,10 @@
           # locations. mix.exs's copy_prod_runtime_config only copies runtime.exs.
           # Replicate the Dockerfile's missing copy so runtime.exs can find it.
           postInstall = ''
-            mkdir -p "$out/config" "$out/releases/11.0.0"
+            mkdir -p "$out/config" "$out/releases/${blockscoutVersion}"
             cp config/config_helper.exs "$out/config/config_helper.exs"
-            cp config/config_helper.exs "$out/releases/11.0.0/config_helper.exs"
-            # Copy precompiles assets if they exist (referenced from config)
+            cp config/config_helper.exs "$out/releases/${blockscoutVersion}/config_helper.exs"
+            # Copy precompiled assets if they exist (referenced from config)
             if [ -d config/assets ]; then
               mkdir -p "$out/config/assets"
               cp -r config/assets/. "$out/config/assets/" || true
@@ -225,8 +242,9 @@
       in
       {
         packages.default = blockscout;
+        packages.blockscout = blockscout;
 
-        checks.${system}.default = blockscout;
+        checks.default = blockscout;
       }
     );
 }
