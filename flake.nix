@@ -213,7 +213,7 @@
             # Copy precompiled assets if they exist (referenced from config)
             if [ -d config/assets ]; then
               mkdir -p "$out/config/assets"
-              cp -r config/assets/. "$out/config/assets/" || true
+              cp -r config/assets/. "$out/config/assets/"
             fi
           '';
 
@@ -234,7 +234,7 @@
           meta = with pkgs.lib; {
             description = "Blockchain explorer for EVM chains";
             homepage = "https://github.com/blockscout/blockscout";
-            license = licenses.gpl3Plus;
+            license = licenses.gpl3Only;
             mainProgram = "blockscout";
             platforms = platforms.linux;
           };
