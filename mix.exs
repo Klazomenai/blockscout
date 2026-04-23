@@ -6,7 +6,7 @@ defmodule BlockScout.Mixfile do
   def project do
     [
       # app: :block_scout,
-      # aliases: aliases(config_env()),
+      aliases: aliases(),
       version: "11.0.0",
       apps_path: "apps",
       deps: deps(),
@@ -71,23 +71,30 @@ defmodule BlockScout.Mixfile do
     ]
   end
 
-  # defp aliases(env) do
-  #   [
-  #     # to match behavior of `mix test` in `apps/indexer`, which needs to not start applications for `indexer` to
-  #     # prevent its supervision tree from starting, which is undesirable in test
-  #     test: "test --no-start"
-  #   ] ++ env_aliases(env)
-  # end
-
-  # defp env_aliases(:dev) do
-  #   []
-  # end
-
-  # defp env_aliases(_env) do
-  #   [
-  #     compile: "compile --warnings-as-errors"
-  #   ]
-  # end
+  # Mix aliases exposing the canonical Nix entrypoints as language-native
+  # task-runner commands. Function references are required (not strings) —
+  # Mix parses string aliases as mix-task invocations, so a bare alias like
+  # "nix build .#default" would be treated as a Mix task name rather than
+  # executing `nix`. `Mix.shell().cmd/1` returns the exit status as an
+  # integer and does NOT raise on non-zero, so the `case` + `Mix.raise/1`
+  # wrapper is required to propagate shell failures through the mix exit
+  # code (otherwise CI would see mix exit 0 when `nix` exited non-zero).
+  defp aliases do
+    [
+      "nix.build": fn _args ->
+        case Mix.shell().cmd("nix build .#default --print-build-logs") do
+          0 -> :ok
+          status -> Mix.raise("`nix build` failed with exit status #{status}")
+        end
+      end,
+      "nix.check": fn _args ->
+        case Mix.shell().cmd("nix flake check --print-build-logs") do
+          0 -> :ok
+          status -> Mix.raise("`nix flake check` failed with exit status #{status}")
+        end
+      end
+    ]
+  end
 
   # Dependencies can be Hex packages:
   #

@@ -36,6 +36,25 @@ See the [project documentation](https://docs.blockscout.com/) for instructions:
 - [ENV variables](https://docs.blockscout.com/setup/env-variables)
 - [Configuration options](https://docs.blockscout.com/for-developers/configuration-options)
 
+### Building with Nix
+
+`flake.nix` provides a reproducible `mixRelease` build of the Blockscout backend, with OTP 27 + Elixir 1.19, 8 pre-compiled Rustler NIFs, and a vendored `libzstd` for `ezstd`. Three equivalent entrypoints:
+
+```sh
+# Canonical hermetic build
+nix build .#default
+nix flake check
+
+# Mix wrappers (idiomatic Elixir task-runner form, same underlying commands)
+mix nix.build
+mix nix.check
+
+# Developer shell (Elixir 1.19 + OTP 27 + native-extension toolchain + pre-commit hooks)
+devenv shell
+```
+
+`devenv.nix` installs `nixfmt-rfc-style`, `statix`, `deadnix`, and `mix format --check-formatted` as pre-commit hooks. See `flake.nix` and `devenv.nix` for the full configuration.
+
 ## Acknowledgements
 
 We would like to thank the EthPrize foundation for their funding support.
