@@ -21,6 +21,11 @@ in
     pkg-config
     zstd # used by :ezstd at build/link time
 
+    # Node for the webpack watcher in apps/block_scout_web/config/dev.exs.
+    # Major version matches the pin in `.tool-versions` (nodejs 20.17.0);
+    # without this, `mix phx.server` fails to launch the asset watcher.
+    nodejs_20
+
     # VCS
     git
     git-lfs
@@ -62,6 +67,6 @@ in
     echo "  mix nix.check          Alias for \`nix flake check\`"
     echo ""
     echo "Pinned versions:"
-    echo "  $(elixir --version | tail -n 1)"
+    elixir --version | sed 's/^/  /'
   '';
 }

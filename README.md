@@ -55,6 +55,8 @@ devenv shell
 
 `devenv.nix` installs `nixfmt-rfc-style`, `statix`, `deadnix`, and `mix format --check-formatted` as pre-commit hooks. See `flake.nix` and `devenv.nix` for the full configuration.
 
+Platform support: `flake.nix` currently targets `x86_64-linux` only. `aarch64-linux` and `darwin` support is tracked as a follow-up (the derivation itself is portable; `flake.nix`'s `eachSystem` list needs broadening).
+
 ## Acknowledgements
 
 We would like to thank the EthPrize foundation for their funding support.
