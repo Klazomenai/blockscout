@@ -155,8 +155,14 @@
           #
           # Maintenance recipe when the FOD hash drifts again:
           #
-          #   1. Reproduce locally:
-          #        nix shell nixpkgs#beam27Packages.elixir_1_19 nixpkgs#git
+          #   1. Reproduce locally with the SAME Mix/Elixir/OTP toolchain
+          #      this flake itself uses (sourced from `flake.lock`'s
+          #      pinned nixpkgs rev, NOT from the user's flake registry
+          #      — the registry's `nixpkgs` typically tracks unstable
+          #      and can drift far ahead of our pinned rev, producing
+          #      different `mix deps.get` output and defeating the
+          #      reproduction):
+          #        nix shell --inputs-from . nixpkgs#beam27Packages.elixir_1_19 nixpkgs#git
           #        export HEX_HOME=$(mktemp -d) MIX_HOME=$(mktemp -d)
           #        mix local.hex --force --if-missing
           #        mix local.rebar --force --if-missing
