@@ -116,9 +116,7 @@
         # Assemble all NIF tarballs into a single cache directory.
         rustlerNifCache = pkgs.runCommand "rustler-nif-cache" { } ''
           mkdir -p $out
-          ${pkgs.lib.concatMapStringsSep "\n" (
-            t: "cp ${fetchNif t} $out/${t.name}"
-          ) nifTarballs}
+          ${pkgs.lib.concatMapStringsSep "\n" (t: "cp ${fetchNif t} $out/${t.name}") nifTarballs}
         '';
 
         # Blockscout requires Elixir ~> 1.19; the default beam27.elixir is 1.18.
@@ -135,11 +133,59 @@
 
           mixReleaseName = "blockscout";
 
+          # Mix dependency closure as a fixed-output derivation. The
+          # output bytes here can drift on identical declared inputs
+          # (mix.lock + mix.exs) because Mix's resolver consults the
+          # live hex registry when deciding whether to fetch optional
+          # transitive deps that are NOT pinned in mix.lock. If the
+          # registry's package metadata changes (new optional-dep
+          # version published, etc.), Mix can flip its decision about
+          # whether to include that dep — which changes the output
+          # tree and therefore the recorded hash.
+          #
+          # Concrete observed instance (issue #7):
+          #   - rustler is declared `optional: true` by 10 packages
+          #     (cafezinho, evil_crc32c, ex_brotli, ex_eth_bls,
+          #     ex_keccak, ex_pbkdf2, ex_secp256k1, image,
+          #     rustler_precompiled, siwe). None pin it.
+          #   - On 2026-04-15, Mix decided to fetch rustler 0.37.3.
+          #   - On 2026-04-27, Mix decided to skip it.
+          #   - Same mix.lock, same mix.exs, same nixpkgs-pinned mix
+          #     binary, different output bytes.
+          #
+          # Maintenance recipe when the FOD hash drifts again:
+          #
+          #   1. Reproduce locally with the SAME Mix/Elixir/OTP toolchain
+          #      this flake itself uses (sourced from `flake.lock`'s
+          #      pinned nixpkgs rev, NOT from the user's flake registry
+          #      — the registry's `nixpkgs` typically tracks unstable
+          #      and can drift far ahead of our pinned rev, producing
+          #      different `mix deps.get` output and defeating the
+          #      reproduction):
+          #        nix shell --inputs-from . nixpkgs#beam27Packages.elixir_1_19 nixpkgs#git
+          #        export HEX_HOME=$(mktemp -d) MIX_HOME=$(mktemp -d)
+          #        mix local.hex --force --if-missing
+          #        mix local.rebar --force --if-missing
+          #        mix deps.get
+          #        git diff mix.lock
+          #
+          #   2. If `mix deps.get` adds entries to mix.lock, commit
+          #      the lockfile delta as a `chore(deps)` commit FIRST
+          #      (this converts registry-state-sensitive resolution
+          #      into lockfile-pinned resolution at root).
+          #
+          #   3. Set the hash here to `pkgs.lib.fakeHash`, then run
+          #      `nix build .#default 2>&1 | grep got:` to capture
+          #      the actual output hash. Replace fakeHash with that
+          #      value, commit as `fix(nix): rotate mixFodDeps hash`.
+          #
+          #   4. Run a clean `nix build .#default` to verify
+          #      end-to-end build succeeds against the new hash.
           mixFodDeps = beam27.fetchMixDeps {
             pname = "mix-deps-blockscout";
             src = ./.;
             version = blockscoutVersion;
-            hash = "sha256-hi8Kq8j91LKQDD8GroLESPnzBfwUeJsszb1lTa0k2iI=";
+            hash = "sha256-i11gJiWjgoCcKRIt0ePjMQOqXTJIVEETQv4s75pEpNU=";
             inherit elixir;
           };
 
