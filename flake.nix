@@ -144,10 +144,10 @@
           # tree and therefore the recorded hash.
           #
           # Concrete observed instance (issue #7):
-          #   - rustler is declared `optional: true` by 9 packages
+          #   - rustler is declared `optional: true` by 10 packages
           #     (cafezinho, evil_crc32c, ex_brotli, ex_eth_bls,
-          #     ex_keccak, ex_pbkdf2, ex_secp256k1, image, siwe).
-          #     None pin it.
+          #     ex_keccak, ex_pbkdf2, ex_secp256k1, image,
+          #     rustler_precompiled, siwe). None pin it.
           #   - On 2026-04-15, Mix decided to fetch rustler 0.37.3.
           #   - On 2026-04-27, Mix decided to skip it.
           #   - Same mix.lock, same mix.exs, same nixpkgs-pinned mix
