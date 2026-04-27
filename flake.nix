@@ -116,9 +116,7 @@
         # Assemble all NIF tarballs into a single cache directory.
         rustlerNifCache = pkgs.runCommand "rustler-nif-cache" { } ''
           mkdir -p $out
-          ${pkgs.lib.concatMapStringsSep "\n" (
-            t: "cp ${fetchNif t} $out/${t.name}"
-          ) nifTarballs}
+          ${pkgs.lib.concatMapStringsSep "\n" (t: "cp ${fetchNif t} $out/${t.name}") nifTarballs}
         '';
 
         # Blockscout requires Elixir ~> 1.19; the default beam27.elixir is 1.18.
@@ -139,7 +137,7 @@
             pname = "mix-deps-blockscout";
             src = ./.;
             version = blockscoutVersion;
-            hash = "sha256-hi8Kq8j91LKQDD8GroLESPnzBfwUeJsszb1lTa0k2iI=";
+            hash = "sha256-i11gJiWjgoCcKRIt0ePjMQOqXTJIVEETQv4s75pEpNU=";
             inherit elixir;
           };
 
