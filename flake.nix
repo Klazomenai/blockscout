@@ -133,6 +133,48 @@
 
           mixReleaseName = "blockscout";
 
+          # Mix dependency closure as a fixed-output derivation. The
+          # output bytes here can drift on identical declared inputs
+          # (mix.lock + mix.exs) because Mix's resolver consults the
+          # live hex registry when deciding whether to fetch optional
+          # transitive deps that are NOT pinned in mix.lock. If the
+          # registry's package metadata changes (new optional-dep
+          # version published, etc.), Mix can flip its decision about
+          # whether to include that dep — which changes the output
+          # tree and therefore the recorded hash.
+          #
+          # Concrete observed instance (issue #7):
+          #   - rustler is declared `optional: true` by 9 packages
+          #     (cafezinho, evil_crc32c, ex_brotli, ex_eth_bls,
+          #     ex_keccak, ex_pbkdf2, ex_secp256k1, image, siwe).
+          #     None pin it.
+          #   - On 2026-04-15, Mix decided to fetch rustler 0.37.3.
+          #   - On 2026-04-27, Mix decided to skip it.
+          #   - Same mix.lock, same mix.exs, same nixpkgs-pinned mix
+          #     binary, different output bytes.
+          #
+          # Maintenance recipe when the FOD hash drifts again:
+          #
+          #   1. Reproduce locally:
+          #        nix shell nixpkgs#beam27Packages.elixir_1_19 nixpkgs#git
+          #        export HEX_HOME=$(mktemp -d) MIX_HOME=$(mktemp -d)
+          #        mix local.hex --force --if-missing
+          #        mix local.rebar --force --if-missing
+          #        mix deps.get
+          #        git diff mix.lock
+          #
+          #   2. If `mix deps.get` adds entries to mix.lock, commit
+          #      the lockfile delta as a `chore(deps)` commit FIRST
+          #      (this converts registry-state-sensitive resolution
+          #      into lockfile-pinned resolution at root).
+          #
+          #   3. Set the hash here to `pkgs.lib.fakeHash`, then run
+          #      `nix build .#default 2>&1 | grep got:` to capture
+          #      the actual output hash. Replace fakeHash with that
+          #      value, commit as `fix(nix): rotate mixFodDeps hash`.
+          #
+          #   4. Run a clean `nix build .#default` to verify
+          #      end-to-end build succeeds against the new hash.
           mixFodDeps = beam27.fetchMixDeps {
             pname = "mix-deps-blockscout";
             src = ./.;
