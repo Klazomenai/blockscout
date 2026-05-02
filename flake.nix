@@ -217,6 +217,80 @@
             openssl
           ];
 
+          # Local symptom suppression: prevent the
+          # `Explorer.Migrator.ReindexDuplicatedInternalTransactions`
+          # GenServer from being started by the application
+          # supervisor.
+          #
+          # What we observe in this fork's build of v11:
+          #
+          # - At BEAM startup the supervisor starts the migrator
+          #   (verified by reading `apps/explorer/lib/explorer/
+          #   application.ex:201` — the `configure_mode_dependent_
+          #   process(Explorer.Migrator.ReindexDuplicatedInternalTransactions,
+          #   :indexer),` line we substitute below).
+          # - The migrator's `unprocessed_data_query/1`
+          #   (verified at `apps/explorer/lib/explorer/migrator/
+          #   reindex_duplicated_internal_transactions.ex:65-71`)
+          #   does
+          #   `from(it in InternalTransaction,
+          #     select: it.block_hash,
+          #     where: not is_nil(it.block_hash),
+          #     group_by: [it.block_hash, it.transaction_index, it.index], …)`.
+          # - The `Explorer.Chain.InternalTransaction` schema
+          #   (verified at `apps/explorer/lib/explorer/chain/
+          #   internal_transaction.ex:56-76`) declares no
+          #   `:block_hash` field.
+          # - On every `:migrate_batch` tick the GenServer raises
+          #   `(Ecto.QueryError) field `block_hash` in `select`
+          #   does not exist in schema Explorer.Chain.
+          #   InternalTransaction`. The supervisor restarts it and
+          #   the cycle repeats; the journal shows the
+          #   error stacktrace clustered at sub-second cadence.
+          #   Observed in integration-VM runs of
+          #   klazomenai/autonity-blockscout-nixos.
+          #
+          # We do NOT know:
+          # - Whether the schema/migrator combination is
+          #   intentional, transitional, or unintended from
+          #   upstream's perspective.
+          # - Whether upstream is aware, planning a fix, or has a
+          #   different code path in mind.
+          #
+          # What this patch does: deletes the supervisor child-spec
+          # line so the migrator GenServer never starts. Rationale:
+          # without an independent verification of upstream intent,
+          # we are not changing the migrator's source — only
+          # preventing its execution in our build. The migrator's
+          # source file remains in-tree, the schema remains
+          # in-tree, no other code is touched.
+          #
+          # In-tree references to the unstarted module:
+          # `apps/explorer/lib/explorer/chain/import/runner/
+          # heavy_db_index_operation/create_internal_transactions_block_number_transaction_index_index_unique_index.ex`
+          # calls `MigrationStatus.fetch(migration_name())`
+          # against this migrator. With the GenServer never
+          # starting, that lookup returns `nil` and the dependent
+          # index-op's wait branch fires — same shape as a fresh
+          # database where the migration has not yet completed.
+          #
+          # Drop this prePatch when:
+          # - independent verification confirms an upstream fix
+          #   (or, equivalently, this fork rebases past a tree
+          #   where the schema-vs-query divergence is gone), OR
+          # - we have direct guidance from upstream that the
+          #   migrator should run as-is on our schema and this
+          #   patch is wrong.
+          # The matching `extraPostMigrate` fixture in
+          # `klazomenai/autonity-blockscout-nixos`'s integration
+          # test can be removed at the same time.
+          prePatch = ''
+            substituteInPlace apps/explorer/lib/explorer/application.ex \
+              --replace-fail \
+                "configure_mode_dependent_process(Explorer.Migrator.ReindexDuplicatedInternalTransactions, :indexer)," \
+                ""
+          '';
+
           # Patch mix.exs to remove nft_media_handler from the release. This
           # is done at Nix build time only — the committed mix.exs is left
           # unchanged so that other build paths (Docker, NFT_MEDIA_HANDLER_IS_WORKER
